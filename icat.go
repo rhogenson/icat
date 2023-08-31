@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"golang.org/x/image/draw"
 	"golang.org/x/term"
 	"image"
 	_ "image/jpeg"
@@ -41,12 +42,12 @@ func printImg(filename string, cols, lines int) error {
 		cols = img.Bounds().Dx() * lines * 5 / 2 / img.Bounds().Dy()
 	}
 
-	// nearest-neighbor interpolation
+	dst := image.NewRGBA(image.Rect(0, 0, cols, lines))
+	draw.ApproxBiLinear.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Over, nil)
+
 	for y := 0; y < lines; y++ {
 		for x := 0; x < cols; x++ {
-			sx := x*img.Bounds().Dx()/cols + img.Bounds().Min.X
-			sy := y*img.Bounds().Dy()/lines + img.Bounds().Min.Y
-			r, g, b, _ := img.At(sx, sy).RGBA()
+			r, g, b, _ := dst.At(x, y).RGBA()
 			fmt.Printf("\033[48;2;%d;%d;%dm ", r>>8, g>>8, b>>8)
 		}
 		fmt.Println("\033[49m")

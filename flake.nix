@@ -9,7 +9,7 @@
 
       src = self;
 
-      vendorHash = "sha256-WiEK8nq13mdTFnyxDiMRWM1tb60mlZY0fVmtlH5ZWgw=";
+      vendorHash = "sha256-v47V+DNmAImNZy/TXEuX1b4IVp960QPk0Lb+T4e6brI=";
     };
 
     defaultPackage.x86_64-linux = packages.x86_64-linux.icat;
