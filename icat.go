@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"golang.org/x/image/draw"
 	"golang.org/x/term"
@@ -45,12 +46,14 @@ func printImg(filename string, cols, lines int) error {
 	dst := image.NewRGBA(image.Rect(0, 0, cols, lines))
 	draw.ApproxBiLinear.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Over, nil)
 
+	buf := bufio.NewWriter(os.Stdout)
+	defer buf.Flush()
 	for y := 0; y < lines; y++ {
 		for x := 0; x < cols; x++ {
 			r, g, b, _ := dst.At(x, y).RGBA()
-			fmt.Printf("\033[48;2;%d;%d;%dm ", r>>8, g>>8, b>>8)
+			fmt.Fprintf(buf, "\033[48;2;%d;%d;%dm ", r>>8, g>>8, b>>8)
 		}
-		fmt.Println("\033[49m")
+		fmt.Fprintln(buf, "\033[49m")
 	}
 	return nil
 }
