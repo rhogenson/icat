@@ -11,6 +11,8 @@ import (
 	"os"
 )
 
+var stdout = bufio.NewWriter(os.Stdout)
+
 func load(filename string) (image.Image, error) {
 	file := os.Stdin
 	if filename != "-" {
@@ -46,14 +48,12 @@ func printImg(filename string, cols, lines int) error {
 	dst := image.NewRGBA(image.Rect(0, 0, cols, lines))
 	draw.ApproxBiLinear.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Over, nil)
 
-	buf := bufio.NewWriter(os.Stdout)
-	defer buf.Flush()
 	for y := 0; y < lines; y++ {
 		for x := 0; x < cols; x++ {
 			r, g, b, _ := dst.At(x, y).RGBA()
-			fmt.Fprintf(buf, "\033[48;2;%d;%d;%dm ", r>>8, g>>8, b>>8)
+			fmt.Fprintf(stdout, "\033[48;2;%d;%d;%dm ", r>>8, g>>8, b>>8)
 		}
-		fmt.Fprintln(buf, "\033[49m")
+		fmt.Fprintln(stdout, "\033[49m")
 	}
 	return nil
 }
@@ -68,6 +68,8 @@ func icat(args []string) error {
 	if len(args) == 0 {
 		args = []string{"-"}
 	}
+
+	defer stdout.Flush()
 	for _, f := range args {
 		if err := printImg(f, cols, lines); err != nil {
 			return err
