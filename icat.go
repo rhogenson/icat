@@ -28,17 +28,11 @@ func load(filename string) (image.Image, error) {
 	return img, nil
 }
 
-func printImg(filename string) error {
+func printImg(filename string, cols, lines int) error {
 	img, err := load(filename)
 	if err != nil {
 		return err
 	}
-
-	cols, lines, err := term.GetSize(1)
-	if err != nil {
-		return fmt.Errorf("terminal size: %s", err)
-	}
-	lines-- // Leave a line for the status bar.
 
 	// Try not to stretch the image.
 	if img.Bounds().Dy()*cols <= img.Bounds().Dx()*lines*5/2 {
@@ -61,11 +55,17 @@ func printImg(filename string) error {
 }
 
 func icat(args []string) error {
+	cols, lines, err := term.GetSize(1)
+	if err != nil {
+		return fmt.Errorf("terminal size: %s", err)
+	}
+	lines-- // Leave a line for the status bar.
+
 	if len(args) == 0 {
 		args = []string{"-"}
 	}
 	for _, f := range args {
-		if err := printImg(f); err != nil {
+		if err := printImg(f, cols, lines); err != nil {
 			return err
 		}
 	}
