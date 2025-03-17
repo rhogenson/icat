@@ -47,7 +47,7 @@ func printImg(filename string, cols, lines int) error {
 	}
 
 	dst := image.NewRGBA(image.Rect(0, 0, cols, 2*lines))
-	draw.CatmullRom.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Over, nil)
+	draw.BiLinear.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Over, nil)
 
 	for y := 0; y < 2*lines; y += 2 {
 		for x := 0; x < cols; x++ {
