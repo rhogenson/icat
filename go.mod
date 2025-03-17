@@ -1,4 +1,4 @@
-module icat
+module gitlab.com/rhogenson/icat
 
 go 1.20
 

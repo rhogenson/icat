@@ -3,12 +3,13 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"golang.org/x/image/draw"
-	"golang.org/x/term"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
 	"os"
+
+	"golang.org/x/image/draw"
+	"golang.org/x/term"
 )
 
 var stdout = bufio.NewWriter(os.Stdout)
@@ -45,16 +46,20 @@ func printImg(filename string, cols, lines int) error {
 		cols = img.Bounds().Dx() * lines * 5 / 2 / img.Bounds().Dy()
 	}
 
-	dst := image.NewRGBA(image.Rect(0, 0, cols, lines))
-	draw.ApproxBiLinear.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Over, nil)
+	dst := image.NewRGBA(image.Rect(0, 0, cols, 2*lines))
+	draw.CatmullRom.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Over, nil)
 
-	for y := 0; y < lines; y++ {
+	for y := 0; y < 2*lines; y += 2 {
 		for x := 0; x < cols; x++ {
-			r, g, b, _ := dst.At(x, y).RGBA()
-			fmt.Fprintf(stdout, "\033[48;2;%d;%d;%dm ", r>>8, g>>8, b>>8)
+			hiR, hiG, hiB, _ := dst.At(x, y).RGBA()
+			loR, loG, loB, _ := dst.At(x, y+1).RGBA()
+			fmt.Fprintf(stdout, "\033[38;2;%d;%d;%dm\033[48;2;%d;%d;%dm▀",
+				hiR>>8, hiG>>8, hiB>>8,
+				loR>>8, loG>>8, loB>>8)
 		}
 		fmt.Fprintln(stdout, "\033[49m")
 	}
+	fmt.Fprint(stdout, "\033[39m")
 	return nil
 }
 
