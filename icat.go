@@ -1,3 +1,4 @@
+// The icat command displays an image to the terminal using block characters.
 package main
 
 import (
@@ -16,6 +17,11 @@ import (
 	_ "golang.org/x/image/tiff"
 	_ "golang.org/x/image/webp"
 	"golang.org/x/term"
+)
+
+var (
+	x = flag.Int("x", 0, "set image width in columns")
+	y = flag.Int("y", 0, "set image height in rows")
 )
 
 func load(filename string) (image.Image, error) {
@@ -39,7 +45,7 @@ func load(filename string) (image.Image, error) {
 
 func printImg(img image.Image, cols, lines int) error {
 	// Try not to stretch the image.
-	if img.Bounds().Dy()*cols <= img.Bounds().Dx()*lines*5/2 {
+	if lines == 0 || cols != 0 && img.Bounds().Dy()*cols <= img.Bounds().Dx()*lines*5/2 {
 		lines = img.Bounds().Dy() * cols / (img.Bounds().Dx() * 5 / 2)
 	} else {
 		cols = img.Bounds().Dx() * lines * 5 / 2 / img.Bounds().Dy()
@@ -73,11 +79,16 @@ func icat(args []string) error {
 	}
 	file := args[0]
 
-	cols, lines, err := term.GetSize(1)
-	if err != nil {
-		return fmt.Errorf("terminal size: %s", err)
+	cols := *x
+	lines := *y
+	if cols == 0 && lines == 0 {
+		var err error
+		cols, lines, err = term.GetSize(1)
+		if err != nil {
+			return fmt.Errorf("terminal size: %s", err)
+		}
+		lines-- // Leave a line for the status bar.
 	}
-	lines-- // Leave a line for the status bar.
 
 	img, err := load(file)
 	if err != nil {
