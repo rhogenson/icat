@@ -2,7 +2,6 @@
 package main
 
 import (
-	"bufio"
 	"errors"
 	"flag"
 	"fmt"
@@ -16,13 +15,60 @@ import (
 	"golang.org/x/image/draw"
 	_ "golang.org/x/image/tiff"
 	_ "golang.org/x/image/webp"
-	"golang.org/x/term"
+	"golang.org/x/sys/unix"
+	"roseh.moe/pkg/sixel"
 )
 
 var (
 	x = flag.Int("x", 0, "set image width in columns")
 	y = flag.Int("y", 0, "set image height in rows")
+	m = flagPrintMode(flag.CommandLine, "m", modeSixel, "one of 'block', 'block24', or 'sixel'")
 )
+
+type printMode int
+
+const (
+	modeInvalid printMode = iota
+	modeBlock
+	modeBlock24
+	modeSixel
+)
+
+type printModeValue printMode
+
+func (m *printModeValue) String() string {
+	switch printMode(*m) {
+	case modeBlock:
+		return "block"
+	case modeBlock24:
+		return "block24"
+	case modeSixel:
+		return "sixel"
+	default:
+		return "invalid"
+	}
+}
+
+func (m *printModeValue) Set(s string) error {
+	var mode printMode
+	switch s {
+	case "block":
+		mode = modeBlock
+	case "block24":
+		mode = modeBlock24
+	case "sixel":
+		mode = modeSixel
+	default:
+		return fmt.Errorf("bad mode type %q, should be one of 'block', 'block24', or 'sixel'", s)
+	}
+	*m = printModeValue(mode)
+	return nil
+}
+
+func flagPrintMode(fs *flag.FlagSet, name string, value printMode, usage string) *printMode {
+	fs.Var((*printModeValue)(&value), name, usage)
+	return &value
+}
 
 func load(filename string) (image.Image, error) {
 	file := os.Stdin
@@ -43,30 +89,26 @@ func load(filename string) (image.Image, error) {
 	return img, nil
 }
 
-func printImg(img image.Image, cols, lines int) error {
+func printImg(img image.Image, x, y, pixelX, pixelY int) error {
 	// Try not to stretch the image.
-	if lines == 0 || cols != 0 && img.Bounds().Dy()*cols <= img.Bounds().Dx()*lines*5/2 {
-		lines = img.Bounds().Dy() * cols / (img.Bounds().Dx() * 5 / 2)
+	if y == 0 || x != 0 && img.Bounds().Dy()*x <= img.Bounds().Dx()*y*pixelY/pixelX {
+		y = img.Bounds().Dy() * x / (img.Bounds().Dx() * pixelY / pixelX)
 	} else {
-		cols = img.Bounds().Dx() * lines * 5 / 2 / img.Bounds().Dy()
+		x = img.Bounds().Dx() * y * pixelY / pixelX / img.Bounds().Dy()
 	}
 
-	dst := image.NewRGBA(image.Rect(0, 0, cols, 2*lines))
-	draw.BiLinear.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Over, nil)
+	dst := image.NewRGBA(image.Rect(0, 0, x, y))
+	draw.BiLinear.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Src, nil)
 
-	w := bufio.NewWriter(os.Stdout)
-	defer w.Flush()
-	for y := 0; y < 2*lines; y += 2 {
-		for x := 0; x < cols; x++ {
-			hiR, hiG, hiB, _ := dst.At(x, y).RGBA()
-			loR, loG, loB, _ := dst.At(x, y+1).RGBA()
-			fmt.Fprintf(w, "\033[38;2;%d;%d;%dm\033[48;2;%d;%d;%dm▀",
-				hiR>>8, hiG>>8, hiB>>8,
-				loR>>8, loG>>8, loB>>8)
-		}
-		fmt.Fprintln(w, "\033[49m")
+	switch *m {
+	case modeBlock:
+		sixel.PrintXTerm16(os.Stdout, dst)
+	case modeBlock24:
+		sixel.PrintBlock(os.Stdout, dst)
+	case modeSixel:
+		sixel.Print(os.Stdout, dst)
 	}
-	fmt.Fprint(w, "\033[39m")
+	fmt.Println()
 	return nil
 }
 
@@ -81,13 +123,30 @@ func icat(args []string) error {
 
 	cols := *x
 	lines := *y
+	pixelX := 2
+	pixelY := 5
 	if cols == 0 && lines == 0 {
-		var err error
-		cols, lines, err = term.GetSize(1)
+		ws, err := unix.IoctlGetWinsize(int(os.Stdout.Fd()), unix.TIOCGWINSZ)
 		if err != nil {
-			return fmt.Errorf("terminal size: %s", err)
+			return err
 		}
+		cols = int(ws.Col)
+		lines = int(ws.Row)
 		lines-- // Leave a line for the status bar.
+		cellX, cellY := int(ws.Xpixel)/int(ws.Col), int(ws.Ypixel)/int(ws.Row)
+		if *m == modeSixel {
+			cols *= cellX
+			lines *= cellY
+		} else {
+			pixelX, pixelY = cellX, cellY
+		}
+	}
+	switch *m {
+	case modeSixel:
+		pixelX, pixelY = 1, 1
+	case modeBlock24:
+		lines *= 2
+		pixelX *= 2
 	}
 
 	img, err := load(file)
@@ -95,7 +154,7 @@ func icat(args []string) error {
 		return err
 	}
 
-	if err := printImg(img, cols, lines); err != nil {
+	if err := printImg(img, cols, lines, pixelX, pixelY); err != nil {
 		return err
 	}
 	return nil
