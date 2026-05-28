@@ -22,7 +22,7 @@ import (
 var (
 	x = flag.Int("x", 0, "set image width in columns")
 	y = flag.Int("y", 0, "set image height in rows")
-	m = flagPrintMode(flag.CommandLine, "m", modeSixel, "one of 'block', 'block24', or 'sixel'")
+	m = flagPrintMode(flag.CommandLine, "m", modeBlock24, "one of 'block', 'block24', or 'sixel'")
 )
 
 type printMode int
@@ -134,6 +134,9 @@ func icat(args []string) error {
 		lines = int(ws.Row)
 		lines-- // Leave a line for the status bar.
 		cellX, cellY := int(ws.Xpixel)/int(ws.Col), int(ws.Ypixel)/int(ws.Row)
+		if cellX == 0 && cellY == 0 {
+			cellX, cellY = 10, 20
+		}
 		if *m == modeSixel {
 			cols *= cellX
 			lines *= cellY
