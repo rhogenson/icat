@@ -7,16 +7,14 @@ import (
 )
 
 func BenchmarkQuickSelect(b *testing.B) {
-	r := rand.New(rand.NewPCG(0, 0))
-	testSlice := make([]int, 3840*2160)
-	for i := range testSlice {
-		testSlice[i] = r.Int()
-	}
-	myTestSlice := make([]int, len(testSlice))
+	rng := rand.New(rand.NewPCG(0, 0))
+	myTestCase := make([]int, 3840*2160)
 	for b.Loop() {
 		b.StopTimer()
-		copy(myTestSlice, testSlice)
+		for i := range myTestCase {
+			myTestCase[i] = rng.Int()
+		}
 		b.StartTimer()
-		quickSelect(myTestSlice, len(myTestSlice)/2, cmp.Compare)
+		quickSelect(myTestCase, len(myTestCase)/2, cmp.Compare)
 	}
 }

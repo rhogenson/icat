@@ -11,7 +11,6 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"math"
-	"math/rand/v2"
 	"os"
 	"slices"
 
@@ -93,36 +92,61 @@ func load(filename string) (image.Image, error) {
 	return img, nil
 }
 
-func partition[S ~[]E, E any](a S, i, j, pivotIndex int, cmp func(E, E) int) int {
-	pivot := a[pivotIndex]
-	for {
-		for ; cmp(a[i], pivot) < 0; i++ {
+func sign(n int) float64 {
+	if n < 0 {
+		return -1
+	}
+	if n > 0 {
+		return 1
+	}
+	return 0
+}
+
+func floydRivest[S ~[]E, E any](array S, left, right, k int, cmp func(E, E) int) {
+	for right > left {
+		if right-left > 600 {
+			n := right - left + 1
+			i := k - left + 1
+			z := math.Log(float64(n))
+			s := .5 * math.Exp(2*z/3)
+			sd := .5 * math.Sqrt(z*s*(float64(n)-s)/float64(n)) * sign(i-n/2)
+			newLeft := max(left, int(float64(k)-float64(i)*s/float64(n)+sd))
+			newRight := min(right, int(float64(k)+float64(n-i)*s/float64(n)+sd))
+			floydRivest(array, newLeft, newRight, k, cmp)
 		}
-		for ; cmp(a[j], pivot) > 0; j-- {
+		t := array[k]
+		i := left
+		j := right
+		array[left], array[k] = array[k], array[left]
+		if cmp(array[right], t) > 0 {
+			array[right], array[left] = array[left], array[right]
 		}
-		if i >= j {
-			return j
+		for i < j {
+			array[i], array[j] = array[j], array[i]
+			i++
+			j--
+			for ; cmp(array[i], t) < 0; i++ {
+			}
+			for ; cmp(array[j], t) > 0; j-- {
+			}
 		}
-		a[i], a[j] = a[j], a[i]
-		i++
-		j--
+		if cmp(array[left], t) == 0 {
+			array[left], array[j] = array[j], array[left]
+		} else {
+			j++
+			array[j], array[right] = array[right], array[j]
+		}
+		if j <= k {
+			left = j + 1
+		}
+		if k <= j {
+			right = j - 1
+		}
 	}
 }
 
 func quickSelect[S ~[]E, E any](list S, k int, cmp func(E, E) int) {
-	left, right := 0, len(list)-1
-	for {
-		if left == right {
-			return
-		}
-		pivotIndex := left + rand.IntN(right-left+1)
-		pivotIndex = partition(list, left, right, pivotIndex, cmp)
-		if k <= pivotIndex {
-			right = pivotIndex
-		} else {
-			left = pivotIndex + 1
-		}
-	}
+	floydRivest(list, 0, len(list)-1, k, cmp)
 }
 
 func bucketRange(colors []color.RGBA) color.RGBA {
