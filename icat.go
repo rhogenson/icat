@@ -6,10 +6,14 @@ import (
 	"flag"
 	"fmt"
 	"image"
+	"image/color"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+	"math"
+	"math/rand/v2"
 	"os"
+	"slices"
 
 	_ "golang.org/x/image/bmp"
 	"golang.org/x/image/draw"
@@ -89,6 +93,116 @@ func load(filename string) (image.Image, error) {
 	return img, nil
 }
 
+func partition[S ~[]E, E any](a S, i, j, pivotIndex int, cmp func(E, E) int) int {
+	pivot := a[pivotIndex]
+	for {
+		for ; cmp(a[i], pivot) < 0; i++ {
+		}
+		for ; cmp(a[j], pivot) > 0; j-- {
+		}
+		if i >= j {
+			return j
+		}
+		a[i], a[j] = a[j], a[i]
+		i++
+		j--
+	}
+}
+
+func quickSelect[S ~[]E, E any](list S, k int, cmp func(E, E) int) {
+	left, right := 0, len(list)-1
+	for {
+		if left == right {
+			return
+		}
+		pivotIndex := left + rand.IntN(right-left+1)
+		pivotIndex = partition(list, left, right, pivotIndex, cmp)
+		if k <= pivotIndex {
+			right = pivotIndex
+		} else {
+			left = pivotIndex + 1
+		}
+	}
+}
+
+func bucketRange(colors []color.RGBA) color.RGBA {
+	if len(colors) == 0 {
+		return color.RGBA{}
+	}
+	var minR, minG, minB uint8 = math.MaxUint8, math.MaxUint8, math.MaxUint8
+	var maxR, maxG, maxB uint8
+	for _, c := range colors {
+		minR, maxR = min(minR, c.R), max(maxR, c.R)
+		minG, maxG = min(minG, c.G), max(maxG, c.G)
+		minB, maxB = min(minB, c.B), max(maxB, c.B)
+	}
+	return color.RGBA{R: maxR - minR, G: maxG - minG, B: maxB - minB}
+}
+
+func cutOnce(colors []color.RGBA, bucketRange color.RGBA) [2][]color.RGBA {
+	if len(colors) == 0 {
+		return [...][]color.RGBA{colors, colors}
+	}
+	rRange, gRange, bRange := bucketRange.R, bucketRange.G, bucketRange.B
+	if rRange >= gRange && rRange >= bRange {
+		quickSelect(colors, len(colors)/2, func(x, y color.RGBA) int { return int(x.R) - int(y.R) })
+	} else if gRange >= rRange && gRange >= bRange {
+		quickSelect(colors, len(colors)/2, func(x, y color.RGBA) int { return int(x.G) - int(y.G) })
+	} else {
+		quickSelect(colors, len(colors)/2, func(x, y color.RGBA) int { return int(x.B) - int(y.B) })
+	}
+	return [...][]color.RGBA{colors[:len(colors)/2], colors[len(colors)/2:]}
+}
+
+func colorAvg(colors []color.RGBA) color.RGBA {
+	var r, g, b int64
+	for _, c := range colors {
+		r += int64(c.R)
+		g += int64(c.G)
+		b += int64(c.B)
+	}
+	n := int64(len(colors))
+	return color.RGBA{R: uint8(r / n), G: uint8(g / n), B: uint8(b / n), A: 0xff}
+}
+
+func medianCut(img image.Image) color.Palette {
+	var colors []color.RGBA
+	for y := img.Bounds().Min.Y; y < img.Bounds().Max.Y; y++ {
+		for x := img.Bounds().Min.X; x < img.Bounds().Max.X; x++ {
+			r, g, b, a := img.At(x, y).RGBA()
+			if a > 0 {
+				colors = append(colors, color.RGBA{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8), A: 0xff})
+			}
+		}
+	}
+	buckets := [][]color.RGBA{colors}
+	bucketRanges := []color.RGBA{{}}
+	for {
+		var bestRange uint8
+		var bestIdx int
+		for i, rng := range bucketRanges {
+			r := max(rng.R, rng.G, rng.B)
+			if r >= bestRange {
+				bestRange = r
+				bestIdx = i
+			}
+		}
+		split := cutOnce(buckets[bestIdx], bucketRanges[bestIdx])
+		buckets = slices.Replace(buckets, bestIdx, bestIdx+1, split[:]...)
+		if len(buckets) == 255 {
+			break
+		}
+		bucketRanges = slices.Replace(bucketRanges, bestIdx, bestIdx+1, bucketRange(split[0]), bucketRange(split[1]))
+	}
+	palette := color.Palette{color.Transparent}
+	for _, b := range buckets {
+		if len(b) > 0 {
+			palette = append(palette, colorAvg(b))
+		}
+	}
+	return palette
+}
+
 func printImg(img image.Image, x, y, pixelX, pixelY int) error {
 	// Try not to stretch the image.
 	if y == 0 || x != 0 && img.Bounds().Dy()*x <= img.Bounds().Dx()*y*pixelY/pixelX {
@@ -106,7 +220,7 @@ func printImg(img image.Image, x, y, pixelX, pixelY int) error {
 	case modeBlock24:
 		sixel.PrintBlock(os.Stdout, dst)
 	case modeSixel:
-		sixel.Print(os.Stdout, dst)
+		sixel.Print(os.Stdout, dst, medianCut(dst))
 	}
 	fmt.Println()
 	return nil
